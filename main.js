@@ -22,14 +22,21 @@ function animateSlide(nextIndex) {
   nextSlide.style.transform = "scale(1.1)";
   nextSlide.style.opacity = "1";
 
-  setTimeout(function () {
-    currentSlide.style.transform = "scale(0.9)";
-    currentSlide.style.opacity = "0";
-    nextSlide.style.transform = "";
-    nextSlide.style.opacity = "";
-    currentSlideIndex = nextIndex;
-    isAnimating = false;
-  }, 600);
+  nextSlide.addEventListener(
+    "transitionend",
+    function handleTransitionEnd() {
+      currentSlide.style.transform = "";
+      currentSlide.style.opacity = "";
+      nextSlide.style.transform = "";
+      nextSlide.style.opacity = "";
+
+      nextSlide.removeEventListener("transitionend", handleTransitionEnd);
+
+      currentSlideIndex = nextIndex;
+      isAnimating = false;
+    },
+    { once: true }
+  );
 }
 
 document.addEventListener("wheel", handleScroll);
