@@ -1,17 +1,18 @@
-const slider = document.querySelector(".swiper");
-const slides = document.querySelectorAll(".swiper-slide");
+const SLIDER_CLASS = ".swiper";
+const SLIDE_CLASS = ".swiper-slide";
+
+const slider = document.querySelector(SLIDER_CLASS);
+const slides = document.querySelectorAll(SLIDE_CLASS);
 let currentSlideIndex = 0;
 let isAnimating = false;
 
-function handleScroll(event) {
-  if (isAnimating) return;
+function isWithinBounds(index) {
+  return index >= 0 && index < slides.length;
+}
 
-  const delta = event.deltaY;
-  if (delta > 0 && currentSlideIndex < slides.length - 1) {
-    animateSlide(currentSlideIndex + 1);
-  } else if (delta < 0 && currentSlideIndex > 0) {
-    animateSlide(currentSlideIndex - 1);
-  }
+function resetSlideStyles(slide) {
+  slide.style.transform = "";
+  slide.style.opacity = "";
 }
 
 function animateSlide(nextIndex) {
@@ -19,24 +20,43 @@ function animateSlide(nextIndex) {
   const currentSlide = slides[currentSlideIndex];
   const nextSlide = slides[nextIndex];
 
-  nextSlide.style.transform = "scale(1.1)";
-  nextSlide.style.opacity = "1";
+  nextSlide.classList.add("active");
+  nextSlide.classList.remove("inactive");
 
   nextSlide.addEventListener(
     "transitionend",
-    function handleTransitionEnd() {
-      currentSlide.style.transform = "";
-      currentSlide.style.opacity = "";
-      nextSlide.style.transform = "";
-      nextSlide.style.opacity = "";
+    () => {
+      resetSlideStyles(currentSlide);
+
+      currentSlide.classList.remove("active");
+      currentSlide.classList.add("inactive");
+
+      nextSlide.classList.remove("inactive");
 
       nextSlide.removeEventListener("transitionend", handleTransitionEnd);
 
       currentSlideIndex = nextIndex;
       isAnimating = false;
+      window.removeEventListener("wheel", handleScroll);
+      setTimeout(() => {
+        window.addEventListener("wheel", handleScroll);
+      }, 500); // Задержка включения скролла
     },
     { once: true }
   );
 }
 
-document.addEventListener("wheel", handleScroll);
+function handleTransitionEnd() {}
+
+function handleScroll(event) {
+  if (isAnimating) return;
+
+  const delta = event.deltaY;
+  const nextIndex = delta > 0 ? currentSlideIndex + 1 : currentSlideIndex - 1;
+
+  if (isWithinBounds(nextIndex)) {
+    animateSlide(nextIndex);
+  }
+}
+
+window.addEventListener("wheel", handleScroll);
