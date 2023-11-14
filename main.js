@@ -1,10 +1,8 @@
-const SLIDER_CLASS = ".swiper";
-const SLIDE_CLASS = ".swiper-slide";
-
-const slider = document.querySelector(SLIDER_CLASS);
-const slides = document.querySelectorAll(SLIDE_CLASS);
+const slider = document.querySelector(".swiper");
+const slides = document.querySelectorAll(".swiper-slide");
 let currentSlideIndex = 0;
 let isAnimating = false;
+let enableScroll = true;
 
 function isWithinBounds(index) {
   return index >= 0 && index < slides.length;
@@ -16,7 +14,9 @@ function resetSlideStyles(slide) {
 }
 
 function animateSlide(nextIndex) {
+  enableScroll = false;
   isAnimating = true;
+
   const currentSlide = slides[currentSlideIndex];
   const nextSlide = slides[nextIndex];
 
@@ -37,19 +37,20 @@ function animateSlide(nextIndex) {
 
       currentSlideIndex = nextIndex;
       isAnimating = false;
-      window.removeEventListener("wheel", handleScroll);
-      setTimeout(() => {
-        window.addEventListener("wheel", handleScroll);
-      }, 500); // Задержка включения скролла
+
+      // В конце анимации установите флаг на true
+      enableScroll = true;
     },
     { once: true }
   );
 }
 
-function handleTransitionEnd() {}
+function handleTransitionEnd() {
+  // Если в будущем появятся дополнительные действия по завершению перехода, их можно добавить сюда
+}
 
 function handleScroll(event) {
-  if (isAnimating) return;
+  if (isAnimating || !enableScroll) return;
 
   const delta = event.deltaY;
   const nextIndex = delta > 0 ? currentSlideIndex + 1 : currentSlideIndex - 1;
