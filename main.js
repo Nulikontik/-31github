@@ -7,12 +7,12 @@ var mySwiper = new Swiper(".swiper-container", {
   loop: true,
   pagination: ".swiper-pagination",
   grabCursor: true,
-  speed: 1000,
+  speed: 2000,
   paginationClickable: true,
   parallax: true,
   autoplay: false,
   effect: "slide",
-  mousewheelControl: 1,
+  mousewheelControl: 2,
   on: {
     slideChange: function () {
       // Анимация элементов при изменении слайда
