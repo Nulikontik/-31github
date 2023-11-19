@@ -54,9 +54,7 @@ if response.status_code == 200:
 else:
     print(f"Failed to retrieve the page. Status code: {response.status_code}")
 
-from bs4 import BeautifulSoup
-import requests
-import pandas as pd
+
 
 def extract_description_text(url):
     try:
