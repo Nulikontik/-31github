@@ -1,24 +1,21 @@
-from bs4 import BeautifulSoup
-!pip3 install bs4
 import requests
-import openpyxl
-url = 'https://lalafo.kg/osh/zemelnye-uchastki/prodazha-zemli'
-response = requests.get(url)
-print(response)
-!pip install openpyxl
-!pip install pandas
-!pip install beautifulsoup4
-
-import openpyxl
 from bs4 import BeautifulSoup
-import requests
 import pandas as pd
 
-url = 'https://lalafo.kg/osh/zemelnye-uchastki/prodazha-zemli'
-response = requests.get(url)
+def get_page_content(url):
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        if response.ok:
+            return response.content
+        else:
+            return None
+    except requests.exceptions.RequestException as e:
+        print(f"Error while fetching the page: {e}")
+        return None
 
-if response.status_code == 200:
-    soup = BeautifulSoup(response.content, 'html.parser')
+def extract_data_from_page(content):
+    soup = BeautifulSoup(content, 'html.parser')
     a_tags = soup.find_all('a')
     p_tags = soup.find_all('p')
 
@@ -29,32 +26,13 @@ if response.status_code == 200:
         price = p_tag.get_text()
         data.append({'Title': title, 'Price': price})
 
-    # Create a DataFrame from the collected data
+    return data
+
+def save_data_to_excel(data, filename):
     df = pd.DataFrame(data)
-
-    # Save the DataFrame to an Excel file
-    df.to_excel('parsed_data.xlsx', index=False)
-    print("Data saved to 'parsed_data.xlsx'.")
-else:
-    print(f"Failed to retrieve the page. Status code: {response.status_code}")
-
-url = 'https://lalafo.kg/osh/zemelnye-uchastki/prodazha-zemli'
-response = requests.get(url)
-if response.status_code == 200:
-    soup = BeautifulSoup(response.content, 'html.parser')
-    a_tags = soup.find_all('a')
-    data_links = []
-    for a_tag in a_tags:
-        a_href = a_tag.get('href')
-        if a_href and 'user' not in a_href:
-            full_link = 'https://lalafo.kg' + a_href
-            if full_link not in data_links:
-                data_links.append(full_link)
-    print(data_links)
-else:
-    print(f"Failed to retrieve the page. Status code: {response.status_code}")
-
-
+    with pd.ExcelWriter(filename, engine='xlsxwriter') as writer:
+        df.to_excel(writer, sheet_name='Sheet1', index=False)
+        writer.save()
 
 def extract_description_text(url):
     try:
@@ -65,7 +43,6 @@ def extract_description_text(url):
         description_wrap = soup.find("div", class_="description__wrap")
         prices = soup.find_all("span", class_="heading price")
 
-        # Check if there is at least one price associated with the description
         if prices:
             price_text = ", ".join([price.text for price in prices])
         else:
@@ -81,12 +58,38 @@ def extract_description_text(url):
     except requests.exceptions.RequestException as e:
         return {"Link": url, "Price": "Error", "Description": str(e)}
 
-data = []
+def main():
+    url = 'https://lalafo.kg/osh/zemelnye-uchastki/prodazha-zemli'
 
-for link in data_links:
-    description_data = extract_description_text(link)
-    data.append(description_data)
+    page_content = get_page_content(url)
+    if page_content:
+        data = extract_data_from_page(page_content)
+        save_data_to_excel(data, 'parsed_data.xlsx')
+        print("Data saved to 'parsed_data.xlsx'.")
+    else:
+        print(f"Failed to retrieve the page at {url}")
 
-df = pd.DataFrame(data)
-df.to_excel("parsed_data.xlsx", index=False)
-print("Data saved to 'parsed_data.xlsx'.")
+    # Extract and save additional data from links
+    response_links = get_page_content(url)
+    if response_links:
+        soup_links = BeautifulSoup(response_links, 'html.parser')
+        a_tags_links = soup_links.find_all('a')
+        data_links = []
+
+        for a_tag in a_tags_links:
+            a_href = a_tag.get('href')
+            if a_href and 'user' not in a_href:
+                full_link = 'https://lalafo.kg' + a_href
+                if full_link not in data_links:
+                    data_links.append(full_link)
+
+        additional_data = []
+        for link in data_links:
+            description_data = extract_description_text(link)
+            additional_data.append(description_data)
+
+        save_data_to_excel(additional_data, 'additional_data.xlsx')
+        print("Additional data saved to 'additional_data.xlsx'.")
+
+if __name__ == "__main__":
+    main()
