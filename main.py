@@ -1,95 +1,102 @@
-import requests
-from bs4 import BeautifulSoup
-import pandas as pd
+# This Python 3 environment comes with many helpful analytics libraries installed
+# It is defined by the kaggle/python Docker image: https://github.com/kaggle/docker-python
+# For example, here's several helpful packages to load
 
-def get_page_content(url):
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        if response.ok:
-            return response.content
-        else:
-            return None
-    except requests.exceptions.RequestException as e:
-        print(f"Error while fetching the page: {e}")
-        return None
+import numpy as np # linear algebra
+import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
 
-def extract_data_from_page(content):
-    soup = BeautifulSoup(content, 'html.parser')
-    a_tags = soup.find_all('a')
-    p_tags = soup.find_all('p')
+# Input data files are available in the read-only "../input/" directory
+# For example, running this (by clicking run or pressing Shift+Enter) will list all files under the input directory
 
-    data = []
+import os
+for dirname, _, filenames in os.walk('/kaggle/input'):
+    for filename in filenames:
+        print(os.path.join(dirname, filename))
 
-    for a_tag, p_tag in zip(a_tags, p_tags):
-        title = a_tag.get_text()
-        price = p_tag.get_text()
-        data.append({'Title': title, 'Price': price})
+# You can write up to 20GB to the current directory (/kaggle/working/) that gets preserved as output when you create a version using "Save & Run All" 
+# You can also write temporary files to /kaggle/temp/, but they won't be saved outside of the current session
 
-    return data
+df=pd.read_csv('/kaggle/input/telcom-churns-dataset/TelcoChurn.csv')
+df.head()
 
-def save_data_to_excel(data, filename):
-    df = pd.DataFrame(data)
-    with pd.ExcelWriter(filename, engine='xlsxwriter') as writer:
-        df.to_excel(writer, sheet_name='Sheet1', index=False)
-        writer.save()
+import matplotlib.pyplot as plt
+%matplotlib inline
+import seaborn as sns
+from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import LabelEncoder
+import tensorflow as tf
 
-def extract_description_text(url):
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score,confusion_matrix,classification_report
 
-        description_wrap = soup.find("div", class_="description__wrap")
-        prices = soup.find_all("span", class_="heading price")
+df.shape
 
-        if prices:
-            price_text = ", ".join([price.text for price in prices])
-        else:
-            price_text = "No price found"
+df.info()
 
-        if description_wrap:
-            p_tags = description_wrap.find_all("p")
-            description_text = " ".join([p.text for p in p_tags])
-        else:
-            description_text = "Description not found"
+df = df.drop(['customerID'], axis = 1)
+df.head()
 
-        return {"Link": url, "Price": price_text, "Description": description_text}
-    except requests.exceptions.RequestException as e:
-        return {"Link": url, "Price": "Error", "Description": str(e)}
+df.isnull().sum()
 
-def main():
-    url = 'https://lalafo.kg/osh/zemelnye-uchastki/prodazha-zemli'
+df['TotalCharges'] = pd.to_numeric(df.TotalCharges, errors='coerce')
+df.isnull().sum()
 
-    page_content = get_page_content(url)
-    if page_content:
-        data = extract_data_from_page(page_content)
-        save_data_to_excel(data, 'parsed_data.xlsx')
-        print("Data saved to 'parsed_data.xlsx'.")
-    else:
-        print(f"Failed to retrieve the page at {url}")
+df[np.isnan(df['TotalCharges'])]
 
-    # Extract and save additional data from links
-    response_links = get_page_content(url)
-    if response_links:
-        soup_links = BeautifulSoup(response_links, 'html.parser')
-        a_tags_links = soup_links.find_all('a')
-        data_links = []
+df.fillna(df["TotalCharges"].mean(),inplace=True)
+#df.dropna(inplace = True)
 
-        for a_tag in a_tags_links:
-            a_href = a_tag.get('href')
-            if a_href and 'user' not in a_href:
-                full_link = 'https://lalafo.kg' + a_href
-                if full_link not in data_links:
-                    data_links.append(full_link)
+plt.figure(figsize=(25, 10))
+corr = df.apply(lambda x: pd.factorize(x)[0]).corr()
+mask = np.triu(np.ones_like(corr, dtype=bool))
+ax = sns.heatmap(corr, mask=mask, xticklabels=corr.columns, yticklabels=corr.columns, annot=True, 
+                 linewidths=.2, cmap='coolwarm', vmin=-1, vmax=1)
 
-        additional_data = []
-        for link in data_links:
-            description_data = extract_description_text(link)
-            additional_data.append(description_data)
+df.columns
 
-        save_data_to_excel(additional_data, 'additional_data.xlsx')
-        print("Additional data saved to 'additional_data.xlsx'.")
+x=['gender', 'SeniorCitizen', 'Partner', 'Dependents','PhoneService', 'MultipleLines', 'InternetService', 'OnlineSecurity',
+       'OnlineBackup', 'DeviceProtection', 'TechSupport', 'StreamingTV',
+       'StreamingMovies', 'Contract', 'PaperlessBilling', 'PaymentMethod', 'Churn']
+le = LabelEncoder()
+for i in x:
+    df[i] = le.fit_transform(df[i])
+df.head()
 
-if __name__ == "__main__":
-    main()
+y = df['Churn'].values
+X = df.drop(columns = ['Churn'])
+
+# Create Train & Test Data
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=101)
+
+models = {
+    'logistic regression' : LogisticRegression(),
+    'Decision Tree' : DecisionTreeClassifier(),
+    'ANN' : MLPClassifier(),
+    'KNN' : KNeighborsClassifier(),
+    'naive bayes' : GaussianNB(),
+}
+
+for name, model in models.items():
+    model.fit(X_train, y_train)
+    print(f'{name} trained')
+    prediction_test = model.predict(X_test)
+    print ('Accuracy:',accuracy_score(y_test, prediction_test))
+    print('Classification report:',classification_report(y_test, prediction_test))
+
+from sklearn.neural_network import MLPClassifier
+clf5 = MLPClassifier()
+clf5.fit(X_train, y_train)
+accuracy = clf5.score(X_test, y_test)
+print(accuracy) 
+
+df = df.drop(['Partner'], axis = 1)
+df
+
+df.info()
+
