@@ -236,4 +236,7 @@ account_circle
 
 [ ]
 
-Платные продукты Colab - Отменить подписку
+
+
+predictions_df.to_csv('/content/drive/MyDrive/predictions_output.csv', index=False)
+
