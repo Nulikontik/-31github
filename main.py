@@ -65,7 +65,7 @@ def regression_model_evaluation(data, description_column='Description', price_co
         }
 
         # Визуализация результатов
-        plt.scatter(y_test, y_pred, color='blue')
+        plt.scatter(y_test, y_pred, color='black')
         plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], color='blue', linewidth=3)
         plt.xlabel('True Prices')
         plt.ylabel('Predicted Prices')
