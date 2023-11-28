@@ -80,7 +80,7 @@ data = pd.read_excel(file_path)
 evaluation_results = regression_model_evaluation(data)
 print(evaluation_results)
 import pandas as pd
-from sklearn.model_selection import train_test_split_forest
+from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.ensemble import GradientBoostingRegressor
