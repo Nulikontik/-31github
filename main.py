@@ -1,170 +1,59 @@
+!pip install selenium
+!apt-get update
+!apt install -y chromium-chromedriver
+!cp /usr/lib/chromium-browser/chromedriver /usr/bin
+!pip install selenium
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from bs4 import BeautifulSoup
+import time
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import PolynomialFeatures
-from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
-import matplotlib.pyplot as plt
-from sklearn.feature_extraction.text import CountVectorizer
 
-def regression_model_evaluation(data, description_column='Description', price_column='Price', degree=2):
-    # Преобразование текстовых описаний в числовые признаки
-    vectorizer = CountVectorizer()
-    X_text = vectorizer.fit_transform(data[description_column])
+def scroll_down(driver, num_scrolls):
+    for _ in range(num_scrolls):
+        driver.find_element(By.TAG_NAME, 'body').send_keys(Keys.END)
+        time.sleep(2)
 
-    # Разделение данных на признаки (X) и целевую переменную (y)
-    X_numeric = pd.DataFrame(X_text.toarray(), columns=vectorizer.get_feature_names_out())
+def parse_data(data):
+    bs = BeautifulSoup(data, 'html.parser')
+    addresses = bs.find_all('div', class_='ci9YC P3xSS')
+    prices = bs.find_all('span', class_='eypL8 uwvkD')
+    data_list = []
+    for price, address in zip(prices, addresses):
+        address_text = address.get('title', '')
+        price_text = price.get_text(strip=True)
+        data_list.append((address_text, price_text))
+    return data_list
 
-    # Преобразование столбца 'Price' в числовой формат
-    data[price_column] = data[price_column].replace({'KGS': ''}, regex=True).str.replace(' ', '').astype(float)
 
-    X = pd.concat([X_numeric, data[[price_column]]], axis=1)
+options = webdriver.ChromeOptions()
+options.add_argument('--headless')
+options.add_argument('--no-sandbox')
+options.add_argument('--disable-dev-shm-usage')
+driver = webdriver.Chrome(options=options)
 
-    # Разделение данных на обучающий и тестовый наборы
-    X_train, X_test, y_train, y_test = train_test_split(X.drop(price_column, axis=1), X[price_column], test_size=0.2, random_state=42)
 
-    # Линейная регрессия
-    linear_model = LinearRegression()
-    linear_model.fit(X_train, y_train)
-    y_pred_linear = linear_model.predict(X_test)
+url = "https://msk.etagi.com/zastr/"
+driver.get(url)
 
-    # Полиномиальная регрессия
-    poly_features = PolynomialFeatures(degree=degree)
-    X_train_poly = poly_features.fit_transform(X_train)
-    X_test_poly = poly_features.transform(X_test)
 
-    poly_model = LinearRegression()
-    poly_model.fit(X_train_poly, y_train)
-    y_pred_poly = poly_model.predict(X_test_poly)
+scroll_down(driver, num_scrolls=3)
 
-    # Градиентный бустинг
-    gb_model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
-    gb_model.fit(X_train, y_train)
-    y_pred_gb = gb_model.predict(X_test)
 
-    # Оценка моделей
-    models = {
-        'Linear Regression': y_pred_linear,
-        f'Polynomial Regression (Degree {degree})': y_pred_poly,
-        'Gradient Boosting': y_pred_gb
-    }
+data = driver.page_source
 
-    results = {}
 
-    for model_name, y_pred in models.items():
-        rmse = mean_squared_error(y_test, y_pred, squared=False)
-        r2 = r2_score(y_test, y_pred)
-        mae = mean_absolute_error(y_test, y_pred)
-        mape = (abs((y_test - y_pred) / y_test)).mean() * 100
+driver.quit()
 
-        results[model_name] = {
-            'RMSE': rmse,
-            'R-squared': r2,
-            'MAE': mae,
-            'MAPE': mape
-        }
 
-        # Визуализация результатов
-        plt.scatter(y_test, y_pred, color='black')
-        plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], color='blue', linewidth=3)
-        plt.xlabel('True Prices')
-        plt.ylabel('Predicted Prices')
-        plt.title(f'{model_name} - Price Prediction')
-        plt.show()
+parsed_data = parse_data(data)
 
-    return results
 
-# Пример использования
-file_path = '/datas2.xlsx'
-data = pd.read_excel(file_path)
-evaluation_results = regression_model_evaluation(data)
-print(evaluation_results)
-import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import PolynomialFeatures
-from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
-import matplotlib.pyplot as plt
-from sklearn.feature_extraction.text import CountVectorizer
+df = pd.DataFrame(parsed_data, columns=['Адрес', 'Цена'])
 
-def regression_model_evaluation(data, description_column='Description', price_column='Price', degree=2):
-    # Преобразование текстовых описаний в числовые признаки
-    vectorizer = CountVectorizer()
-    X_text = vectorizer.fit_transform(data[description_column])
 
-    # Разделение данных на признаки (X) и целевую переменную (y)
-    X_numeric = pd.DataFrame(X_text.toarray(), columns=vectorizer.get_feature_names_out())
+print(df)
 
-    # Преобразование столбца 'Price' в числовой формат
-    data[price_column] = data[price_column].replace({'KGS': ''}, regex=True).str.replace(' ', '').astype(float)
 
-    X = pd.concat([X_numeric, data[[price_column]]], axis=1)
-
-    # Разделение данных на обучающий и тестовый наборы
-    X_train, X_test, y_train, y_test = train_test_split(X.drop(price_column, axis=1), X[price_column], test_size=0.2, random_state=42)
-
-    # Линейная регрессия
-    linear_model = LinearRegression()
-    linear_model.fit(X_train, y_train)
-    y_pred_linear = linear_model.predict(X_test)
-
-    # Полиномиальная регрессия
-    poly_features = PolynomialFeatures(degree=degree)
-    X_train_poly = poly_features.fit_transform(X_train)
-    X_test_poly = poly_features.transform(X_test)
-
-    poly_model = LinearRegression()
-    poly_model.fit(X_train_poly, y_train)
-    y_pred_poly = poly_model.predict(X_test_poly)
-
-    # Градиентный бустинг
-    gb_model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
-    gb_model.fit(X_train, y_train)
-    y_pred_gb = gb_model.predict(X_test)
-
-    # Оценка моделей
-    models = {
-        'Linear Regression': y_pred_linear,
-        f'Polynomial Regression (Degree {degree})': y_pred_poly,
-        'Gradient Boosting': y_pred_gb
-    }
-
-    results = {}
-
-    for model_name, y_pred in models.items():
-        rmse = mean_squared_error(y_test, y_pred, squared=False)
-        r2 = r2_score(y_test, y_pred)
-        mae = mean_absolute_error(y_test, y_pred)
-        mape = (abs((y_test - y_pred) / y_test)).mean() * 100
-
-        results[model_name] = {
-            'RMSE': rmse,
-            'R-squared': r2,
-            'MAE': mae,
-            'MAPE': mape
-        }
-
-        # Визуализация результатов
-        plt.scatter(y_test, y_pred, color='black')
-        plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], color='blue', linewidth=3)
-        plt.xlabel('True Prices')
-        plt.ylabel('Predicted Prices')
-        plt.title(f'{model_name} - Price Prediction')
-        plt.show()
-
-    return results
-
-# Пример использования
-file_path = '/datas2.xlsx'
-data = pd.read_excel(file_path)
-evaluation_results = regression_model_evaluation(data)
-print(evaluation_results)
-fig = plt.figure(figsize=(17, 15))
-grid = GridSpec(ncols=1, nrows=2, figure=fig)
-
-ax1 = fig.add_subplot(grid[0, :])
-sns.countplot(x=data.date.dt.month, ax=ax1)
-
-ax2 = fig.add_subplot(grid[1, :])
-sns.boxplot(x=data.date.dt.month, y='price', data=data, ax=ax2)
+df.to_excel('output_data.xlsx', index=False)
