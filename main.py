@@ -1,162 +1,78 @@
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import PolynomialFeatures
-from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+import prophet
+from prophet import Prophet
+from prophet.plot import add_changepoints_to_plot
 import matplotlib.pyplot as plt
-from sklearn.feature_extraction.text import CountVectorizer
+import os
+from google.analytics.data_v1beta import BetaAnalyticsDataClient
+from google.analytics.data_v1beta.types import DateRange
+from google.analytics.data_v1beta.types import Dimension
+from google.analytics.data_v1beta.types import Metric
+from google.analytics.data_v1beta.types import Filter
+from google.analytics.data_v1beta.types import FilterExpression
+from google.analytics.data_v1beta.types import FilterExpressionList
+from google.analytics.data_v1beta.types import RunReportRequest
 
-def regression_model_evaluation(data, description_column='Description', price_column='Price', degree=2):
-    # Преобразование текстовых описаний в числовые признаки
-    vectorizer = CountVectorizer()
-    X_text = vectorizer.fit_transform(data[description_column])
+PROPERTY_ID = '280409742'
+START_DATE = '2023-01-01'
+END_DATE = '2023-11-01'
+PERIODS = 11
+FREQ = 'M'
 
-    # Разделение данных на признаки (X) и целевую переменную (y)
-    X_numeric = pd.DataFrame(X_text.toarray(), columns=vectorizer.get_feature_names_out())
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "first-prediction-seo-e9c9b01b2d29.json"
 
-    # Преобразование столбца 'Price' в числовой формат
-    data[price_column] = data[price_column].replace({'KGS': ''}, regex=True).str.replace(' ', '').astype(float)
 
-    X = pd.concat([X_numeric, data[[price_column]]], axis=1)
+def ga4(PROPERTY_ID, START_DATE, END_DATE):
+    client = BetaAnalyticsDataClient()
 
-    # Разделение данных на обучающий и тестовый наборы
-    X_train, X_test, y_train, y_test = train_test_split(X.drop(price_column, axis=1), X[price_column], test_size=0.2, random_state=42)
+    request = RunReportRequest(property=f"properties/{PROPERTY_ID}",
+                               dimensions=[Dimension(name='date')],
+                               metrics=[Metric(name='eventCount')],
+                               date_ranges=[DateRange(start_date=START_DATE, end_date=END_DATE)],
+                               dimension_filter=FilterExpression(and_group=FilterExpressionList(expressions=[
+                                   FilterExpression(filter=Filter(field_name='sessionDefaultChannelGrouping',
+                                                                  string_filter=Filter.StringFilter(
+                                                                      value='Organic Search',
+                                                                      match_type=Filter.StringFilter.MatchType(1)))),
+                                   FilterExpression(filter=Filter(field_name='eventName',
+                                                                  string_filter=Filter.StringFilter(
+                                                                      value='session_start',
+                                                                      match_type=Filter.StringFilter.MatchType(1))))])))
+    response = client.run_report(request)
 
-    # Линейная регрессия
-    linear_model = LinearRegression()
-    linear_model.fit(X_train, y_train)
-    y_pred_linear = linear_model.predict(X_test)
+    x, y = ([] for i in range(2))
+    for row in response.rows:
+        x.append(row.dimension_values[0].value)
+        y.append(row.metric_values[0].value)
+        print(row.dimension_values[0].value, row.metric_values[0].value)
 
-    # Полиномиальная регрессия
-    poly_features = PolynomialFeatures(degree=degree)
-    X_train_poly = poly_features.fit_transform(X_train)
-    X_test_poly = poly_features.transform(X_test)
+    return x, y
 
-    poly_model = LinearRegression()
-    poly_model.fit(X_train_poly, y_train)
-    y_pred_poly = poly_model.predict(X_test_poly)
 
-    # Градиентный бустинг
-    gb_model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
-    gb_model.fit(X_train, y_train)
-    y_pred_gb = gb_model.predict(X_test)
+def forecasting(x, y, p, f):
+    print('Prophet %s' % prophet.__version__)
 
-    # Оценка моделей
-    models = {
-        'Linear Regression': y_pred_linear,
-        f'Polynomial Regression (Degree {degree})': y_pred_poly,
-        'Gradient Boosting': y_pred_gb
-    }
+    data = {'ds': x, 'y': y}
+    df = pd.DataFrame(data, columns=['ds', 'y'])
+    m = Prophet(growth='linear',
+                changepoint_prior_scale=0.05,
+                seasonality_mode='additive',
+                daily_seasonality=True,
+                weekly_seasonality=True,
+                yearly_seasonality=True,
+                holidays=None
+                )
 
-    results = {}
+    m.fit(df)
+    future = m.make_future_dataframe(periods = PERIODS, freq = FREQ)
+    forecast = m.predict(future)
 
-    for model_name, y_pred in models.items():
-        rmse = mean_squared_error(y_test, y_pred, squared=False)
-        r2 = r2_score(y_test, y_pred)
-        mae = mean_absolute_error(y_test, y_pred)
-        mape = (abs((y_test - y_pred) / y_test)).mean() * 100
+    print(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].head())
+    fig = m.plot(forecast, xlabel='Date', ylabel='Visits')
+    add_changepoints_to_plot(fig.gca(), m, forecast)
+    m.plot_components(forecast)
+    plt.show()
 
-        results[model_name] = {
-            'RMSE': rmse,
-            'R-squared': r2,
-            'MAE': mae,
-            'MAPE': mape
-        }
-
-        # Визуализация результатов
-        plt.scatter(y_test, y_pred, color='black')
-        plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], color='blue', linewidth=3)
-        plt.xlabel('True Prices')
-        plt.ylabel('Predicted Prices')
-        plt.title(f'{model_name} - Price Prediction')
-        plt.show()
-
-    return results
-
-# Пример использования
-file_path = '/datas2.xlsx'
-data = pd.read_excel(file_path)
-evaluation_results = regression_model_evaluation(data)
-print(evaluation_results)
-import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import PolynomialFeatures
-from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
-import matplotlib.pyplot as plt
-from sklearn.feature_extraction.text import CountVectorizer
-
-def regression_model_evaluation(data, description_column='Description', price_column='Price', degree=2):
-    # Преобразование текстовых описаний в числовые признаки
-    vectorizer = CountVectorizer()
-    X_text = vectorizer.fit_transform(data[description_column])
-
-    # Разделение данных на признаки (X) и целевую переменную (y)
-    X_numeric = pd.DataFrame(X_text.toarray(), columns=vectorizer.get_feature_names_out())
-
-    # Преобразование столбца 'Price' в числовой формат
-    data[price_column] = data[price_column].replace({'KGS': ''}, regex=True).str.replace(' ', '').astype(float)
-
-    X = pd.concat([X_numeric, data[[price_column]]], axis=1)
-
-    # Разделение данных на обучающий и тестовый наборы
-    X_train, X_test, y_train, y_test = train_test_split(X.drop(price_column, axis=1), X[price_column], test_size=0.2, random_state=42)
-
-    # Линейная регрессия
-    linear_model = LinearRegression()
-    linear_model.fit(X_train, y_train)
-    y_pred_linear = linear_model.predict(X_test)
-
-    # Полиномиальная регрессия
-    poly_features = PolynomialFeatures(degree=degree)
-    X_train_poly = poly_features.fit_transform(X_train)
-    X_test_poly = poly_features.transform(X_test)
-
-    poly_model = LinearRegression()
-    poly_model.fit(X_train_poly, y_train)
-    y_pred_poly = poly_model.predict(X_test_poly)
-
-    # Градиентный бустинг
-    gb_model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
-    gb_model.fit(X_train, y_train)
-    y_pred_gb = gb_model.predict(X_test)
-
-    # Оценка моделей
-    models = {
-        'Linear Regression': y_pred_linear,
-        f'Polynomial Regression (Degree {degree})': y_pred_poly,
-        'Gradient Boosting': y_pred_gb
-    }
-
-    results = {}
-
-    for model_name, y_pred in models.items():
-        rmse = mean_squared_error(y_test, y_pred, squared=False)
-        r2 = r2_score(y_test, y_pred)
-        mae = mean_absolute_error(y_test, y_pred)
-        mape = (abs((y_test - y_pred) / y_test)).mean() * 100
-
-        results[model_name] = {
-            'RMSE': rmse,
-            'R-squared': r2,
-            'MAE': mae,
-            'MAPE': mape
-        }
-
-        # Визуализация результатов
-        plt.scatter(y_test, y_pred, color='black')
-        plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], color='blue', linewidth=3)
-        plt.xlabel('True Prices')
-        plt.ylabel('Predicted Prices')
-        plt.title(f'{model_name} - Price Prediction')
-        plt.show()
-
-    return results
-
-# Пример использования
-file_path = '/datas2.xlsx'
-data = pd.read_excel(file_path)
-evaluation_results = regression_model_evaluation(data)
-print(evaluation_results)
+if __name__ == "__main__":
+    channel_group, event_count = ga4(PROPERTY_ID, START_DATE, END_DATE)
+    forecasting(channel_group, event_count, PERIODS, FREQ)
