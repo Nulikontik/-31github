@@ -1,33 +1,76 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, r2_score
 
-def get_data(page_num):
-    url = f"https://salexy.kg/osh/nedvizhimost/uchastki?page={page_num}"
-    response = requests.get(url)
-    if response.status_code == 200:
-        return response.text
-    else:
-        return None
+# Your data
+data = {
+    'Area (m2)': [6.00, 500.00, 400.00],
+    'Land Use': ['Industrial', 'Residential (IZHS)', 'Residential (IZHS)'],
+    'Location': ['Asan-Chek, S.U. Kurmanzhan Datka', 'Osh city, Kene-Sai district', 'Osh city, T. Satylganova street'],
+    'Price (KGS)': [40000, 1500000, 4000000]
+}
 
-def parse_data(data):
-    bs = BeautifulSoup(data, 'html.parser')
-    prices = bs.find_all('div', class_='price')
-    addresses = bs.find_all('div', class_='properties')  # Fixed the typo here
-    data_list = []
-    for price, address in zip(prices, addresses):
-        price_text = price.get_text(strip=True)
-        address_text = address.get('title', '')
-        data_list.append((price_text, address_text))
-    return data_list
+# Create a DataFrame
+df = pd.DataFrame(data)
 
-page_numbers = [1, 2]
-all_data = []
+# Explore the data
+print(df)
 
-for page_num in page_numbers:
-    data = get_data(page_num)
-    if data:
-        parsed_data = parse_data(data)
-        all_data.extend(parsed_data)
+# Scatter plot: Price vs Area
+sns.scatterplot(x='Area (m2)', y='Price (KGS)', data=df, hue='Land Use')
+plt.title('Price vs Area')
+plt.show()
 
-for price, address in all_data:
-    print("Price:", price)
-    print("Address:", address)
-    print()
+# Boxplot: Price vs Location
+plt.figure(figsize=(12, 6))
+sns.boxplot(x='Location', y='Price (KGS)', data=df)
+plt.title('Price vs Location')
+plt.xticks(rotation=45, ha='right')
+plt.show()
+
+# Correlation matrix
+correlation_matrix = df.corr()
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', linewidths=0.5)
+plt.title('Correlation Matrix')
+plt.show()
+
+# Predictive model
+# Convert categorical features to numerical using one-hot encoding
+df_encoded = pd.get_dummies(df, columns=['Land Use', 'Location'], drop_first=True)
+
+# Select features (X) and target variable (y)
+X = df_encoded[['Area (m2)', 'Land Use_Residential (IZHS)', 'Location_Osh city, Kene-Sai district', 'Location_Osh city, T. Satylganova street']]
+y = df_encoded['Price (KGS)']
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Create and fit the linear regression model
+model = LinearRegression()
+model.fit(X_train, y_train)
+
+# Make predictions on the test set
+y_pred = model.predict(X_test)
+
+# Evaluate the model
+mse = mean_squared_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
+
+print(f'Mean Squared Error: {mse}')
+print(f'R-squared: {r2}')
+
+# Example prediction
+new_data = {
+    'Area (m2)': [300.00],
+    'Land Use_Residential (IZHS)': [1],
+    'Location_Osh city, Kene-Sai district': [0],
+    'Location_Osh city, T. Satylganova street': [0]
+}
+
+new_df = pd.DataFrame(new_data)
+new_pred = model.predict(new_df)
+
+print(f'Predicted Price for the new data: {new_pred[0]} KGS')
