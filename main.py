@@ -1,81 +1,102 @@
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import PolynomialFeatures
-from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
-import matplotlib.pyplot as plt
-from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics import mean_squared_error, r2_score
 
-def regression_model_evaluation(data, description_column='Description', price_column='Price', degree=2):
-    # Преобразование текстовых описаний в числовые признаки
-    vectorizer = CountVectorizer()
-    X_text = vectorizer.fit_transform(data[description_column])
+# Your data
+data = {
+    'Area (m2)': [6.00, 500.00, 400.00],
+    'Land Use': ['Industrial', 'Residential (IZHS)', 'Residential (IZHS)'],
+    'Location': ['Asan-Chek, S.U. Kurmanzhan Datka', 'Osh city, Kene-Sai district', 'Osh city, T. Satylganova street'],
+    'Price (KGS)': [40000, 1500000, 4000000]
+}
 
-    # Разделение данных на признаки (X) и целевую переменную (y)
-    X_numeric = pd.DataFrame(X_text.toarray(), columns=vectorizer.get_feature_names_out())
+# Create a DataFrame
+df = pd.DataFrame(data)
 
-    # Преобразование столбца 'Price' в числовой формат
-    data[price_column] = data[price_column].replace({'KGS': ''}, regex=True).str.replace(' ', '').astype(float)
+# Explore the data
+print(df)
 
-    X = pd.concat([X_numeric, data[[price_column]]], axis=1)
+# Scatter plot: Price vs Area
+sns.scatterplot(x='Area (m2)', y='Price (KGS)', data=df, hue='Land Use')
+plt.title('Price vs Area')
+plt.show()
 
-    # Разделение данных на обучающий и тестовый наборы
-    X_train, X_test, y_train, y_test = train_test_split(X.drop(price_column, axis=1), X[price_column], test_size=0.2, random_state=42)
+# Boxplot: Price vs Location
+plt.figure(figsize=(12, 6))
+sns.boxplot(x='Location', y='Price (KGS)', data=df)
+plt.title('Price vs Location')
+plt.xticks(rotation=45, ha='right')
+plt.show()
 
-    # Линейная регрессия
-    linear_model = LinearRegression()
-    linear_model.fit(X_train, y_train)
-    y_pred_linear = linear_model.predict(X_test)
+# Correlation matrix
+correlation_matrix = df.corr()
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', linewidths=0.5)
+plt.title('Correlation Matrix')
+plt.show()
 
-    # Полиномиальная регрессия
-    poly_features = PolynomialFeatures(degree=degree)
-    X_train_poly = poly_features.fit_transform(X_train)
-    X_test_poly = poly_features.transform(X_test)
+# Predictive model
+# Convert categorical features to numerical using one-hot encoding
+df_encoded = pd.get_dummies(df, columns=['Land Use', 'Location'], drop_first=True)
 
-    poly_model = LinearRegression()
-    poly_model.fit(X_train_poly, y_train)
-    y_pred_poly = poly_model.predict(X_test_poly)
+# Select features (X) and target variable (y)
+X = df_encoded[['Area (m2)', 'Land Use_Residential (IZHS)', 'Location_Osh city, Kene-Sai district', 'Location_Osh city, T. Satylganova street']]
+y = df_encoded['Price (KGS)']
 
-    # Градиентный бустинг
-    gb_model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
-    gb_model.fit(X_train, y_train)
-    y_pred_gb = gb_model.predict(X_test)
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    # Оценка моделей
-    models = {
-        'Linear Regression': y_pred_linear,
-        f'Polynomial Regression (Degree {degree})': y_pred_poly,
-        'Gradient Boosting': y_pred_gb
-    }
+# Create and fit the linear regression model
+model = LinearRegression()
+model.fit(X_train, y_train)
 
-    results = {}
+# Make predictions on the test set
+y_pred = model.predict(X_test)
 
-    for model_name, y_pred in models.items():
-        rmse = mean_squared_error(y_test, y_pred, squared=False)
-        r2 = r2_score(y_test, y_pred)
-        mae = mean_absolute_error(y_test, y_pred)
-        mape = (abs((y_test - y_pred) / y_test)).mean() * 100
+# Evaluate the model
+mse = mean_squared_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
 
-        results[model_name] = {
-            'RMSE': rmse,
-            'R-squared': r2,
-            'MAE': mae,
-            'MAPE': mape
-        }
+print(f'Mean Squared Error: {mse}')
+print(f'R-squared: {r2}')
 
-        # Визуализация результатов
-        plt.scatter(y_test, y_pred, color='black')
-        plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], color='blue', linewidth=3)
-        plt.xlabel('True Prices')
-        plt.ylabel('Predicted Prices')
-        plt.title(f'{model_name} - Price Prediction')
-        plt.show()
+# Example prediction
+new_data = {
+    'Area (m2)': [300.00],
+    'Land Use_Residential (IZHS)': [1],
+    'Location_Osh city, Kene-Sai district': [0],
+    'Location_Osh city, T. Satylganova street': [0]
+}
 
-    return results
+new_df = pd.DataFrame(new_data)
+new_pred = model.predict(new_df)
 
-# Пример использования
-file_path = '/datas2.xlsx'
-data = pd.read_excel(file_path)
-evaluation_results = regression_model_evaluation(data)
-print(evaluation_results)
+print(f'Predicted Price for the new data: {new_pred[0]} KGS')
+'''
+"Площадь, м2: 6,00; Земля: Промназначения; С/у курманжан датка, село Асан-Чек",40 KGS,
+"Земля: Сельхозназначения (СНТ, ДНТ); Ош шаарга караштуу, Кен-Сай массивинде.Ориентир:Жапалак",no price,
+"Земля: Поселения (ИЖС); Ул. Суркеева, село Курманжан Датка, Асанчек айыл. Ошская область",no price,
+"Площадь, м2: 500,00; Земля: Поселения (ИЖС); Ош ш, кенеш",,
+Земля: Поселения (ИЖС);,,
+Земля: Поселения (ИЖС); г.ош 225квартал жил массив Керме ТОО,,
+"Земля: Поселения (ИЖС); г.Ош, жил массив Керме-Тоо, 225-й квартал.",no price,
+"Площадь, м2: 400,00; Земля: Поселения (ИЖС); г.Ош, ул.Т.Сатылганова",,
+"Площадь, м2: 500,00; Земля: Поселения (ИЖС); город Ош, Фуркат",,
+"Площадь, м2: 6 000,00; Земля: Промназначения; Ош шаары Массив Кең сай",no price,
+"Площадь, м2: 6,00; Земля: Промназначения; Массив Кең сай Ош",,
+"Площадь, м2: 6,00; Земля: Промназначения; Массив Кең сай",,
+"Площадь, м2: 6,00; Земля: Промназначения; Кең сай",,
+Земля: Поселения (ИЖС); Гульбар,,
+"Площадь, м2: 6,00; Земля: Промназначения; Жапалак",,
+Земля: Поселения (ИЖС);,,
+"Площадь, м2: 20,00; Земля: Поселения (ИЖС); мкр Эдельвейс",,
+Земля: Поселения (ИЖС); Супаналиева,no price,
+Земля: Поселения (ИЖС);,,
+Земля: Поселения (ИЖС);,no price,
+"Площадь, м2: 60,00; Земля: Сельхозназначения (СНТ, ДНТ); Фуркат, Кыргыз чек айылы.",no price,
+Земля: Поселения (ИЖС);,,
+Земля: Поселения (ИЖС); ,,
+Земля: Поселения (ИЖС);,,
+'''
